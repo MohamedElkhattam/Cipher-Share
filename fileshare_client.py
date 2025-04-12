@@ -1,14 +1,12 @@
-import socket
-import crypto_utils
 import os
+import socket
 
 
 class FileShareClient:
     def __init__(self):
-        self.client_socket = socket.socket(socket.AF_INET,
-                                           socket.SOCK_STREAM)
-        self.username = None
-        self.session_key = None
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # self.username = None
+        # self.session_key = None
 
     def connect_to_peer(self, peer_address):
         try:
@@ -39,13 +37,57 @@ class FileShareClient:
         # ... (Read file in chunks, encrypt chunks, send chunks to peer -
         # need to implement P2P file transfer protocol - simplified) ...
         # ... (File encryption using crypto_utils, integrity hash generation) ...
-        pass
+        try:
+            self.client_socket.send('UPLOAD'.encode())
+            file_size = os.path.getsize(filepath)
+            file_name = os.path.basename(filepath)
+            with open(filepath, 'rb') as file:
+                file_data = file.read()
 
-    def download_file(self, file_id, destination_path):
+            self.client_socket.send(file_name.encode())
+            self.client_socket.send(str(file_size).encode())
+            self.client_socket.sendall(file_data)
+            print(f"File Uploaded Successfully to peer")
+
+        except Exception as e:
+            print(f"Client upload failed: {e}")
+        finally:
+            file.close()
+            self.client_socket.close()
+
+    def download_file(self, filename, destination_path):  # there should be fileId
         # ... (Request file from peer, receive encrypted chunks, decrypt chunks, verify integrity,
         # save file) ...
         # ... (File decryption, integrity verification) ...
-        pass
+        try:
+            self.client_socket.send('DOWNLOAD'.encode())
+            self.client_socket.send(filename.encode())
+
+            file_size_data = self.client_socket.recv(1024).decode()
+            if file_size_data == "FILE_NOT_FOUND":
+                print(f"File '{filename}' not found on peer.")
+                return
+
+            file_size = int(file_size_data)
+            file_data = b''
+            while len(file_data) < file_size:
+                packet = self.client_socket.recv(file_size - len(file_data))
+                if not packet:
+                    break
+                file_data += packet
+
+            full_path = os.path.join(destination_path, filename)
+            with open(full_path, 'wb') as file:
+                file.write(file_data)
+
+            print(f"File '{filename}' saved to {destination_path}")
+
+        except Exception as e:
+            print(f"Download failed: {e}")
+
+        finally:
+            self.client_socket.close()
+            file.close()
 
     def search_files(self, keyword):
         # ... (Implement file search in the P2P network - broadcasting?
