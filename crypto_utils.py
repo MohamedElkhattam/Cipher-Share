@@ -57,22 +57,22 @@ def decrypt_data(ciphertext, key):
 
 # === USAGE EXAMPLE ===
 if __name__ == "__main__":
-    password = "MySecurePassword123"
-    salt = os.urandom(16)
+    user_password = "MySecurePassword123"
 
     print("\n--- Password Hashing ---")
-    hashed = hash_password(password)
+    hashed = hash_password(user_password)
     print("Hashed:", hashed)
-    print("Verified:", verify_password(password, hashed))
+    print("Verified:", verify_password(user_password, hashed))
 
-    print("\n--- Key Derivation ---")
-    key = derive_key_from_password(password, salt)
-    print("Key (hex):", key.hex())
-
-    print("\n--- Encrypt/Decrypt ---")
-    secret = b"This is a secret message."
-    encrypted = encrypt_data(secret, key)
-    print("Encrypted:", encrypted.hex())
-
-    decrypted = decrypt_data(encrypted, key)
-    print("Decrypted:", decrypted.decode())
+    # salt = os.urandom(16)
+    # print("\n--- Key Derivation ---")
+    # key = derive_key_from_password(password, salt)
+    # print("Key (hex):", key.hex())
+    #
+    # print("\n--- Encrypt/Decrypt ---")
+    # secret = b"This is a secret message."
+    # encrypted = encrypt_data(secret, key)
+    # print("Encrypted:", encrypted.hex())
+    #
+    # decrypted = decrypt_data(encrypted, key)
+    # print("Decrypted:", decrypted.decode())
