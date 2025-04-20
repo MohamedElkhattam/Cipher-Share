@@ -48,7 +48,7 @@ class FileSharePeer:
                 # ... (Receive commands from client - register, login, upload, download, search, etc. - define a simple protocol) ...
                 # Example - define command structure
                 command = str(client_socket.recv(1024).decode())
-
+                print("New Command")
                 # ...REGISTER...
                 if command == "REGISTER":
                     username, hashed_pass = str(client_socket.recv(1024).decode()).split("||")

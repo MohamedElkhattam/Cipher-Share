@@ -169,5 +169,4 @@ if __name__ == "__main__":
         if peerMain:
             centralizedServer_socket.send("DISCONNECT".encode())
             centralizedServer_socket.close()
-            for connection in peerMain.peer.connected_users:
-                connection.close()
+            peerMain.client.disconnect_peer()

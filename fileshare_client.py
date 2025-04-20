@@ -60,9 +60,9 @@ class FileShareClient:
             self.client_socket.send(file_name.encode())
             self.client_socket.send(str(file_size).encode())
             self.client_socket.sendall(file_data)
-            self.shared_files.append(file_data)
             print(f"[Client] File Uploaded Successfully")
             file.close()
+            self.shared_files.append(file_name)
         except Exception as e:
             print(f"[Client] Client upload failed: {e}")
 
@@ -114,5 +114,8 @@ class FileShareClient:
             return self.shared_files
 
     def disconnect_peer(self):
-        self.client_socket.send("DISCONNECT".encode())
-        self.client_socket.close()
+        try:
+            self.client_socket.send("DISCONNECT".encode())
+            self.client_socket.close()
+        except Exception:
+            pass
