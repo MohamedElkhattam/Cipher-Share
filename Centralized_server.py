@@ -5,10 +5,11 @@ import threading
 
 class CentralizedServer:
     def __init__(self):
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket = None
         self.online_peers = []
 
     def start_server(self):
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind(('localhost', 8080))
         self.server_socket.listen()
         print("Server Listening On Port 8080")
@@ -23,12 +24,19 @@ class CentralizedServer:
             self.online_peers.append(peer_address)
             while True:
                 command = peer_connection.recv(1024).decode()
+
                 if command == "ONLINE_PEERS":
                     online_peers_dict = {}
                     for i in range(len(self.online_peers)):
                         if self.online_peers[i] != peer_address:
                             online_peers_dict[i + 1] = self.online_peers[i]
                     peer_connection.send(json.dumps(online_peers_dict).encode())
+
+                elif command == "DISCONNECT":
+                    self.online_peers.remove(peer_address)
+                    print(f"[Server] {peer_address} disconnected.")
+                    break
+
         except Exception as e:
             print(e)
 

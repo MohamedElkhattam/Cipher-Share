@@ -2,6 +2,7 @@ import json
 import os
 import socket
 import threading
+from InquirerPy import inquirer
 from fileshare_client import FileShareClient as Client
 from fileshare_peer import FileSharePeer as Peer
 
@@ -25,26 +26,26 @@ class PeerMain:
 
 if __name__ == "__main__":
     peerMain = None
-    connected = False
+    isLoggedIn = False
+    connectedToPeer = False
     centralizedServer_socket = None
     try:
-
-
-        portNumber = int(input("Enter the port number: "))
+        portNumber = input("Enter the port number: ")
         peerMain = PeerMain(portNumber)
         peerMain.run_server()
 
         # Connecting to Centralized Server
         centralizedServer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         centralizedServer_socket.connect(('localhost', 8080))
+        centralizedServer_socket.sendall(f"{peerMain.peer.host},{peerMain.peer.port}".encode())
         print("[Peer] Connected to Centralized server")
 
         while True:
-            centralizedServer_socket.sendall(f"{peerMain.peer.host},{peerMain.peer.port}".encode())
-            see_peers = input("List Online Peers ? (y/n):")
-            if see_peers != "y":
-                print("[Peer] Waiting for incoming requests")
-                print("[Peer] Press Enter to connect to peer")
+            see_peers = inquirer.select(
+                message="List Online Peers ?",
+                choices=['Yes', 'No']).execute()
+            if see_peers != 'Yes':
+                print("Press Enter to connect to peer")
                 while True:
                     click = input()
                     break
@@ -62,42 +63,56 @@ if __name__ == "__main__":
                 continue
             else:
                 while True:
-                    print("List of Online Peers:\n" +
-                          "\n".join([f"{peer_no}. Peer{str(peer_no)}" for peer_no in online_peers.keys()]))
-                    print("Which peer you want to connect to ?")
-                    peer_number = input()
-                    if peer_number in online_peers.keys():
-                        ip, port = str(online_peers[peer_number]).split(',')
-                        print(f"Peer{peer_number} info -> IP = {ip} , Port = {port}")
-                        menu_options = input(f"1. Connect to Peer{peer_number}\n2. List Online Peers\n3. Exit\n")
-                        if menu_options == '1':
-                            peerMain.run_client((ip, int(port))) #
-                            connected = True
-                            break
-                        elif menu_options == '2':
-                            continue
-                        elif menu_options == '3':
-                            break
-                    else:
-                        print("Wrong Input Try another input")
+                    peer_number = inquirer.select(
+                        message="List of Online Peers :",
+                        choices=[
+                            f"{peer_no}. Peer{str(peer_no)}" for peer_no in online_peers.keys()],
+                    ).execute()[0]
+                    ip, port = str(online_peers[peer_number]).split(',')
+                    menu_options = inquirer.select(
+                        message=f"Peer {peer_number} IP = {ip} , Port = {port}",
+                        choices=[
+                            f"1. Connect to Peer {peer_number}",
+                            f"2. List Online Peers", "3. Exit"]).execute()[0]
+                    if menu_options == '1':
+                        peerMain.run_client((ip, int(port)))
+                        connectedToPeer = True
+                        break
+                    elif menu_options == '2':
+                        continue
+                    elif menu_options == '3':
+                        break
 
-            while True and connected:
-                userChoice = input("1. REGISTER\n2. LOGIN\n3. UPLOAD\n4. DOWNLOAD\n"
-                                   "5. SEARCH\n6. Show All files\n7. Disconnect\n")
+            while connectedToPeer and not isLoggedIn:
+                # ...Authentication Section...
+                AuthenticationChoice = inquirer.select(
+                    message="Choose an Authentication :",
+                    choices=["1. REGISTER", "2. LOGIN"]).execute()[0]
 
-                # Authentication Section
+                if AuthenticationChoice == "1":
+                    username = input("Username :")
+                    password = input("Password :")
+                    result = peerMain.client.register_user(username, password)
+                    if result:
+                        print("Registered Successfully Please login")
+                        AuthenticationChoice = "2"
+                if AuthenticationChoice == "2":
+                    username = input("Username :")
+                    password = input("Password :")
+                    result = peerMain.client.login_user(username, password)
+                    if result:
+                        print("Logged In Successfully")
+                        isLoggedIn = True
+
+            while isLoggedIn and connectedToPeer:
+                # ...File Handling Section...
+                userChoice = inquirer.select(
+                    message="Application Menu",
+                    choices=["1. UPLOAD", "2. DOWNLOAD", "3. SEARCH", "4. Show All files", "5. Disconnect"]
+                ).execute()[0]
+
+                # ...File Upload...
                 if userChoice == "1":
-                    username = input("Please enter your username and password\nUsername :")
-                    password = input("Password :")
-                    peerMain.client.register_user(username, password)
-                    # peerMain.handle_client('REGISTER' , username , password)
-                elif userChoice == "2":
-                    username = input("Please enter your username and password\nUsername :")
-                    password = input("Password :")
-                    peerMain.client.login_user(username, password)
-
-                # File Handling Section
-                elif userChoice == "3":
                     path = input("Please enter path of the file to be uploaded\nPath :")
                     if os.path.exists(path):
                         try:
@@ -106,36 +121,44 @@ if __name__ == "__main__":
                             print(f"Upload file failed :{e}")
                     else:
                         print(f"File not found in :{path}")
-                elif userChoice == "4":
-                    filename = input("Please enter name of the file to be downloaded\nFilename: ")
-                    path = input("Where you want to save your file\nPath :")
-                    peerMain.client.download_file(filename, path)
 
-                elif userChoice == "5":
-                    filename = input("Please enter file name\nFilename: ")
+                # ...File Download...
+                elif userChoice == "2":
+                    filename = input("Please enter name of the file to be downloaded\nFilename :")
+                    destination_path = input("Where to download the file\nDestination Path :")
+                    peerMain.client.download_file(filename, destination_path)
+
+                # ...Search File...
+                elif userChoice == "3":
+                    filename = input("Please enter file name\nFilename :")
                     isFound = peerMain.client.search_files(filename)
                     if isFound:
-                        downloadOption = input("Want to download File? (y/n): \n")
-                        if downloadOption.lower() == 'y':
-                            destination_path = input("Please enter destination path\nDestination Path :")
+                        downloadOption = inquirer.select(
+                            message="Want to download File",
+                            choices=['Yes', 'No']).execute()
+                        if downloadOption == 'Yes':
+                            destination_path = input("Where to download file\nDestination Path :")
                             peerMain.client.download_file(filename, destination_path)
-                        else:
-                            print("Returning to main menu...")
                     else:
-                        print("The File you are searching for not found")
+                        print("File not found")
 
-                elif userChoice == "6":
-                    peerMain.client.list_shared_files()
+                # ...List All Files...
+                elif userChoice == "4":
+                    result = peerMain.client.list_shared_files()
+                    if result:
+                        for file in result:
+                            print(file)
+                    else:
+                        print("No shared files found")
 
-                # Exit and wrong commands
-                elif userChoice == "7":
+                # ...Disconnect Peer...
+                elif userChoice == "5":
                     peerMain.client.disconnect_peer()
+                    connectedToPeer = False
                     print("Disconnected")
                     break
-                else:
-                    print("INVALID OPTION\n")
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt:  # CTRL + C To Exit
         print("Exiting...")
 
     except Exception as e:
@@ -144,6 +167,7 @@ if __name__ == "__main__":
     finally:
         print("Closing connection")
         if peerMain:
+            centralizedServer_socket.send("DISCONNECT".encode())
+            centralizedServer_socket.close()
             for connection in peerMain.peer.connected_users:
                 connection.close()
-        centralizedServer_socket.close()

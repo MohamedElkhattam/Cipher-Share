@@ -1,28 +1,42 @@
-import socket
-import threading
 import os
+import json
+import uuid
+import socket
+import datetime
+import threading
 import crypto_utils
+
+
+def json_file_read():
+    if os.path.getsize('credentials.json') > 0:
+        with open('credentials.json', 'r') as json_file:
+            parsed_json_data = json.load(json_file)
+    else:
+        parsed_json_data = {"users": []}
+        with open('credentials.json', 'w') as json_file:
+            json.dump(parsed_json_data, json_file, indent=4)
+    return parsed_json_data
 
 
 # ... (Data structures for user info, shared files, peer lists etc.)...
 class FileSharePeer:
     def __init__(self, port):
-        self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.peer_socket = None
         self.port = int(port)
         self.host = '127.0.0.1'
         self.connected_users = []
-        self.users = {}  # {username: {hashed_password, salt, ...}} -In - memory for simplicity, consider file-based storage for persistence
-        # {file_id: [filepath, owner_username, ...]} - Track files shared by this peer
         self.shared_files = {}  # {file_name: [filepath , fileSize]}
+        # {file_id: [filepath, owner_username, ...]} - Track files shared by this peer
 
     def start_peer(self):
+        self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.peer_socket.bind((self.host, self.port))
         self.peer_socket.listen(5)
         print("[Peer] Server listening ...")
 
         while True:
             client_socket, client_address = self.peer_socket.accept()
-            self.connected_users.append(client_socket)
+            self.connected_users.append(client_address)
             print(f"[Peer] Connected to {client_address}")
             client_thread = threading.Thread(target=self.handle_client_connection,
                                              args=(client_socket, client_address))
@@ -35,43 +49,58 @@ class FileSharePeer:
                 # Example - define command structure
                 command = str(client_socket.recv(1024).decode())
 
-                # .......Register........
+                # ...REGISTER...
                 if command == "REGISTER":
-                    # ... (store user info) ...
-                    username, hashed_pass = str(
-                        client_socket.recv(1024).decode()).split("||")
-                    if username in self.users.keys():
-                        client_socket.send("USER_ALREADY_EXISTS".encode())
-                        print("[Peer]User already exists!")
+                    username, hashed_pass = str(client_socket.recv(1024).decode()).split("||")
+                    jsonFile_data = json_file_read()
+
+                    for user in jsonFile_data["users"]:
+                        if user["username"] == username:
+                            client_socket.send("USER_ALREADY_EXISTS".encode())
+                            print("[Peer] User already exists!")
+                            break
                     else:
-                        self.users[username] = hashed_pass
-                        client_socket.send("REGISTER".encode())
-                        print("[Peer] User stored successfully")
+                        user = {
+                            "username": username, "hashed_pass": hashed_pass,
+                            "session_id": None, "session_expiration_date": None
+                        }
+                        jsonFile_data["users"].append(user)
+
+                        with open('credentials.json', 'w') as json_file:
+                            json.dump(jsonFile_data, json_file, indent=4)
+
+                        client_socket.send("OK".encode())
+                        print("[Peer] User Registered Successfully")
 
                 # .......Login.........
                 elif command == "LOGIN":
-                    # ... (create session - simplified) ...
-                    # Session + no 2 users logged in with same credentials
-                    username, password = str(
-                        client_socket.recv(1024).decode()).split("||")
-                    if username in self.users.keys():
-                        res = crypto_utils.verify_password(
-                            password, self.users[username])
-                        if res:
-                            client_socket.send("OK".encode())
-                            print("[Peer] User logged in  successfully")
-                        else:
-                            client_socket.send("INCORRECT_PASSWORD".encode())
+                    # No 2 users logged in with same credentials
+                    username, password = str(client_socket.recv(1024).decode()).split("||")
+                    jsonFile_data = json_file_read()
+                    for user in jsonFile_data["users"]:
+                        if user["username"] == username:
+                            res = crypto_utils.verify_password(password, user["hashed_pass"])
+                            if res:
+                                session_id = str(uuid.uuid4())
+                                user["session_id"] = session_id
+                                session_expiration_date = datetime.datetime.now() + datetime.timedelta(minutes=5)
+                                user["session_expiration_date"] = session_expiration_date.isoformat()
+                                with open('credentials.json', 'w') as json_file:
+                                    json.dump(jsonFile_data, json_file, indent=4)
+                                client_socket.send(session_id.encode())
+                                print("[Peer] User logged in  successfully")
+                                break
                     else:
-                        client_socket.send("USERNAME_NOT_FOUND".encode())
+                        client_socket.send("WRONG_CREDENTIALS".encode())
 
                 # ......Upload........
                 elif command == "UPLOAD":
                     # ... (Receive file metadata, then encrypted file chunks, store chunks, update shared_files list) ...
                     file_name = client_socket.recv(1024).decode()
                     if file_name in self.shared_files.keys():
+                        # client_socket.send("FILE_EXISTS".encode())
                         print(f"[Peer] file {file_name} already exists")
-
+                        continue
                     file_size = int(client_socket.recv(1024).decode())
                     file_data = b''
                     while len(file_data) < file_size:
@@ -84,7 +113,6 @@ class FileSharePeer:
                     cwd = os.getcwd()
                     self.shared_files[file_name] = [cwd, file_size]
                     print(f"[Peer] Received file '{file_name}' successfully.")
-                    return
 
                 # ........Download........
                 elif command == "DOWNLOAD":
@@ -94,7 +122,7 @@ class FileSharePeer:
                         client_socket.send(str("FILE_NOT_FOUND").encode())
                         print("[Peer] File not found.")
                         continue
-                    
+
                     filepath = os.path.join(
                         self.shared_files[filename][0], filename)
                     file_size = self.shared_files[filename][1]
@@ -119,17 +147,12 @@ class FileSharePeer:
                     else:
                         client_socket.send(str("FILE_NOT_FOUND").encode())
 
-                elif command == "LIST_FILES":
-                    files_string = '$'.join(self.shared_files.keys())
-                    client_socket.send(files_string.encode())
-                    print(f"[Peer]{self.shared_files.keys()}")
+                # Client Disconnected
+                elif command == "DISCONNECT":
+                    self.connected_users.remove(client_address)
+                    break
         except WindowsError:
-            pass  # To be fixed
+            print(WindowsError)  # To be fixed
 
         except Exception as e:
             print(f"[Peer] Error handling client {client_address}: {e}")
-
-        finally:
-            for conn in self.connected_users:
-                self.connected_users.remove(conn)
-            client_socket.close()

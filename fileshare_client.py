@@ -5,22 +5,18 @@ import crypto_utils
 
 class FileShareClient:
     def __init__(self):
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket = None
         self.username = None
-        # self.session_key = None
+        self.session_key = None
+        self.shared_files = []
 
     def connect_to_peer(self, peer_address):
-        # while True:
         try:
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect(peer_address)
-            print(f"[Client]Connected to peer at {peer_address}")
-            return
-        # except ConnectionRefusedError:
-        #     print("[Peer Client] No peers available, retrying in 5 seconds...")
-        #     time.sleep(5)
+            print(f"[Client] Connected to peer at {peer_address}")
         except Exception as e:
             print(f"Exception connection to Peer Server with address{peer_address}:{e}")
-            # break
 
     def register_user(self, username, password):
         #  how to distribute user info in P2P? - Simplification needed, perhaps a dedicate
@@ -30,7 +26,10 @@ class FileShareClient:
         hashed_password = crypto_utils.hash_password(password)
         self.client_socket.send(f"{username}||{hashed_password}".encode())
         res = self.client_socket.recv(1024).decode()
-        print("[Client]" + res)
+        if res == "OK":
+            return True
+        print("[Client] " + res)
+        return False
 
     def login_user(self, username, password):
         # authenticates against stored hashed password - handle session -
@@ -39,9 +38,13 @@ class FileShareClient:
         self.client_socket.send("LOGIN".encode())
         self.client_socket.send(f"{username}||{password}".encode())
         res = self.client_socket.recv(1024).decode()
-        if res == "OK":
+        if res == "WRONG_CREDENTIALS":
+            print("[Client] " + res)
+            return False
+        else:
+            self.session_key = res
             self.username = username
-        print("[Client]" + res)
+            return True
 
     def upload_file(self, filepath):
         # ... (Read file in chunks, encrypt chunks, send chunks to peer -
@@ -57,7 +60,8 @@ class FileShareClient:
             self.client_socket.send(file_name.encode())
             self.client_socket.send(str(file_size).encode())
             self.client_socket.sendall(file_data)
-            print(f"[Client] File Uploaded Successfully to peer")
+            self.shared_files.append(file_data)
+            print(f"[Client] File Uploaded Successfully")
             file.close()
         except Exception as e:
             print(f"[Client] Client upload failed: {e}")
@@ -104,16 +108,11 @@ class FileShareClient:
         return False
 
     def list_shared_files(self):
-        # ... (Keep track of locally shared files and display them) ...
-        # ... (Methods for P2P message handling, network discovery - simplified) ...
-        self.client_socket.send("LIST_FILES".encode())
-        files_string = self.client_socket.recv(1024).decode()
-        if files_string == '{}':
-            print("No shared files found.")
+        if not self.shared_files:
+            return None
         else:
-            for file_name in files_string.split('$'):
-                print(file_name)
-        # Please display all files you have
+            return self.shared_files
 
     def disconnect_peer(self):
+        self.client_socket.send("DISCONNECT".encode())
         self.client_socket.close()
