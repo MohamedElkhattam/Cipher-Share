@@ -1,6 +1,5 @@
-# crypto_utils.py
 import secrets
-# for encryption 
+# for encryption
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # for encrypting passwords
@@ -52,24 +51,26 @@ def decrypt_data(ciphertext, key):
     return decryptor.update(ciphertext[16:]) + decryptor.finalize()
 
 
+def hash_sha256(data):
+    digest = hashes.Hash(hashes.SHA256())
+    digest.update(data)
+    hashed = digest.finalize()
+    return hashed.hex()
+
 # === USAGE EXAMPLE ===
-if __name__ == "__main__":
-    user_password = "MySecurePassword123"
-
-    print("\n--- Password Hashing ---")
-    hashed = hash_password(user_password)
-    print("Hashed:", hashed)
-    print("Verified:", verify_password(user_password, hashed))
-
-    # salt = os.urandom(16)
-    # print("\n--- Key Derivation ---")
-    # key = derive_key_from_password(password, salt)
-    # print("Key (hex):", key.hex())
-    #
-    # print("\n--- Encrypt/Decrypt ---")
-    # secret = b"This is a secret message."
-    # encrypted = encrypt_data(secret, key)
-    # print("Encrypted:", encrypted.hex())
-    #
-    # decrypted = decrypt_data(encrypted, key)
-    # print("Decrypted:", decrypted.decode())
+# if __name__ == "__main__":
+#     print(hash_sha256("fileName".encode()))
+#     user_password = "MySecurePassword123"
+#
+#     salt = os.urandom(16)
+#     print("\n--- Key Derivation ---")
+#     key = derive_key_from_password("MyPass", salt)
+#     print("Key (hex):", key.hex())
+#
+#     print("\n--- Encrypt/Decrypt ---")
+#     secret = b"This is a secret message."
+#     encrypted = encrypt_data(secret, key)
+#     print("Encrypted:", encrypted.hex())
+#
+#     decrypted = decrypt_data(encrypted, key)
+#     print("Decrypted:", decrypted.decode())

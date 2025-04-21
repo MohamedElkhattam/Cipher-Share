@@ -8,7 +8,7 @@ class FileShareClient:
         self.client_socket = None
         self.username = None
         self.session_key = None
-        self.shared_files = []
+        self.shared_files = {}
 
     def connect_to_peer(self, peer_address):
         try:
@@ -60,9 +60,17 @@ class FileShareClient:
             self.client_socket.send(file_name.encode())
             self.client_socket.send(str(file_size).encode())
             self.client_socket.sendall(file_data)
+
+            file_id = crypto_utils.hash_sha256(file_data)
+            if file_id not in self.shared_files:
+                self.shared_files[file_id] = [file_name]
+            else:
+                self.shared_files[file_id].append(file_name)
+
+            print(self.shared_files)
+
             print(f"[Client] File Uploaded Successfully")
             file.close()
-            self.shared_files.append(file_name)
         except Exception as e:
             print(f"[Client] Client upload failed: {e}")
 
@@ -111,7 +119,7 @@ class FileShareClient:
         if not self.shared_files:
             return None
         else:
-            return self.shared_files
+            return list(self.shared_files.values())
 
     def disconnect_peer(self):
         try:

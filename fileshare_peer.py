@@ -12,7 +12,7 @@ def json_file_read():
         with open('credentials.json', 'r') as json_file:
             parsed_json_data = json.load(json_file)
     else:
-        parsed_json_data = {"users": []}
+        parsed_json_data = {}
         with open('credentials.json', 'w') as json_file:
             json.dump(parsed_json_data, json_file, indent=4)
     return parsed_json_data
@@ -27,6 +27,9 @@ class FileSharePeer:
         self.connected_users = []
         self.shared_files = {}  # {file_name: [filepath , fileSize]}
         # {file_id: [filepath, owner_username, ...]} - Track files shared by this peer
+
+    # def isAuthenticated(self, sessionID):
+    #     json_data = json_file_read()
 
     def start_peer(self):
         self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -45,26 +48,21 @@ class FileSharePeer:
     def handle_client_connection(self, client_socket, client_address):
         try:
             while True:
-                # ... (Receive commands from client - register, login, upload, download, search, etc. - define a simple protocol) ...
-                # Example - define command structure
                 command = str(client_socket.recv(1024).decode())
-                print("New Command")
                 # ...REGISTER...
                 if command == "REGISTER":
                     username, hashed_pass = str(client_socket.recv(1024).decode()).split("||")
                     jsonFile_data = json_file_read()
+                    if username in jsonFile_data:
+                        client_socket.send("USER_ALREADY_EXISTS".encode())
+                        print("[Peer] User already exists!")
 
-                    for user in jsonFile_data["users"]:
-                        if user["username"] == username:
-                            client_socket.send("USER_ALREADY_EXISTS".encode())
-                            print("[Peer] User already exists!")
-                            break
                     else:
                         user = {
-                            "username": username, "hashed_pass": hashed_pass,
+                            "hashed_pass": hashed_pass,
                             "session_id": None, "session_expiration_date": None
                         }
-                        jsonFile_data["users"].append(user)
+                        jsonFile_data[username] = user
 
                         with open('credentials.json', 'w') as json_file:
                             json.dump(jsonFile_data, json_file, indent=4)
@@ -77,19 +75,19 @@ class FileSharePeer:
                     # No 2 users logged in with same credentials
                     username, password = str(client_socket.recv(1024).decode()).split("||")
                     jsonFile_data = json_file_read()
-                    for user in jsonFile_data["users"]:
-                        if user["username"] == username:
-                            res = crypto_utils.verify_password(password, user["hashed_pass"])
-                            if res:
-                                session_id = str(uuid.uuid4())
-                                user["session_id"] = session_id
-                                session_expiration_date = datetime.datetime.now() + datetime.timedelta(minutes=5)
-                                user["session_expiration_date"] = session_expiration_date.isoformat()
-                                with open('credentials.json', 'w') as json_file:
-                                    json.dump(jsonFile_data, json_file, indent=4)
-                                client_socket.send(session_id.encode())
-                                print("[Peer] User logged in  successfully")
-                                break
+
+                    if username in jsonFile_data:
+                        res = crypto_utils.verify_password(password, jsonFile_data[username]["hashed_pass"])
+                        if res:
+                            session_id = str(uuid.uuid4())
+                            jsonFile_data[username]["session_id"] = session_id
+                            session_expiration_date = datetime.datetime.now() + datetime.timedelta(minutes=5)
+                            jsonFile_data[username]["session_expiration_date"] = session_expiration_date.isoformat()
+                            with open('credentials.json', 'w') as json_file:
+                                json.dump(jsonFile_data, json_file, indent=4)
+                            client_socket.send(session_id.encode())
+                            print("[Peer] User logged in  successfully")
+                            break
                     else:
                         client_socket.send("WRONG_CREDENTIALS".encode())
 
