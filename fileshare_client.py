@@ -52,12 +52,20 @@ class FileShareClient:
         # ... (File encryption using crypto_utils, integrity hash generation) ...
         try:
             self.client_socket.send('UPLOAD'.encode())
+
+            self.client_socket.send(self.session_key.encode())
+            isAuth = self.client_socket.recv(1024).decode()
+            print(isAuth)
+            if isAuth == "INVALID_SESSION":
+                return False
+
             file_name = os.path.basename(filepath)
+            self.client_socket.send(file_name.encode())
             file_size = os.path.getsize(filepath)
+
             with open(filepath, 'rb') as file:
                 file_data = file.read()
 
-            self.client_socket.send(file_name.encode())
             self.client_socket.send(str(file_size).encode())
             self.client_socket.sendall(file_data)
 
@@ -66,7 +74,6 @@ class FileShareClient:
                 self.shared_files[file_id] = [file_name]
             else:
                 self.shared_files[file_id].append(file_name)
-
             print(self.shared_files)
 
             print(f"[Client] File Uploaded Successfully")
@@ -80,8 +87,12 @@ class FileShareClient:
         # ... (File decryption, integrity verification) ...
         try:
             self.client_socket.send('DOWNLOAD'.encode())
-            self.client_socket.send(filename.encode())
+            # self.client_socket.send(self.session_key.encode())
+            # isAuth = self.client_socket.recv(1024).decode()
+            # if isAuth == "INVALID_SESSION":
+            #     return False
 
+            self.client_socket.send(filename.encode())
             file_size_data = self.client_socket.recv(1024).decode()
             if file_size_data == "FILE_NOT_FOUND":
                 print(f"[Client]  File '{filename}' not found on peer.")
@@ -108,7 +119,13 @@ class FileShareClient:
     def search_files(self, file_name):  # Keyword
         # ... (Implement file search in the P2P network - broadcasting?
         # Distributed Index? - Simplification required) ...
+
         self.client_socket.send("SEARCH".encode())
+        # self.client_socket.send(self.session_key.encode())
+        # isAuth = self.client_socket.recv(1024).decode()
+        # if isAuth == "INVALID_SESSION":
+        #     return False
+
         self.client_socket.send(file_name.encode())
         res = self.client_socket.recv(1024).decode()
         if res == "FILE_FOUND":
