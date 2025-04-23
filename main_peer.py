@@ -116,7 +116,12 @@ if __name__ == "__main__":
                     path = input("Please enter path of the file to be uploaded\nPath :")
                     if os.path.exists(path):
                         try:
-                            peerMain.client.upload_file(path)
+                            result = peerMain.client.upload_file(path)
+                            if result == False:
+                                isLoggedIn = False
+                                connectedToPeer = False
+                                print("Session Invalid please login")
+                                break
                         except Exception as e:
                             print(f"Upload file failed :{e}")
                     else:
@@ -124,9 +129,16 @@ if __name__ == "__main__":
 
                 # ...File Download...
                 elif userChoice == "2":
-                    filename = input("Please enter name of the file to be downloaded\nFilename :")
+                    filename = input("Please enter file name\nFilename :")
                     destination_path = input("Where to download the file\nDestination Path :")
-                    peerMain.client.download_file(filename, destination_path)
+                    result = peerMain.client.download_file(filename, destination_path)
+                    if result is False:
+                        isLoggedIn = False
+                        connectedToPeer = False
+                        print("Session Invalid please login")
+                        break
+                    elif result is None:
+                        print("File not found")
 
                 # ...Search File...
                 elif userChoice == "3":

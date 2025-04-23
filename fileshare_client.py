@@ -18,6 +18,12 @@ class FileShareClient:
         except Exception as e:
             print(f"Exception connection to Peer Server with address{peer_address}:{e}")
 
+    def authenticate_session(self):
+        self.client_socket.send(self.session_key.encode())
+        isAuth = self.client_socket.recv(1024).decode()
+        print(isAuth)
+        return isAuth
+
     def register_user(self, username, password):
         #  how to distribute user info in P2P? - Simplification needed, perhaps a dedicate
         #  'user registry' peer initially or file-based for simplicity) ...
@@ -52,13 +58,9 @@ class FileShareClient:
         # ... (File encryption using crypto_utils, integrity hash generation) ...
         try:
             self.client_socket.send('UPLOAD'.encode())
-
-            self.client_socket.send(self.session_key.encode())
-            isAuth = self.client_socket.recv(1024).decode()
-            print(isAuth)
-            if isAuth == "INVALID_SESSION":
+            if self.authenticate_session() == "INVALID_SESSION":
                 return False
-
+            print("print here")
             file_name = os.path.basename(filepath)
             self.client_socket.send(file_name.encode())
             file_size = os.path.getsize(filepath)
@@ -87,16 +89,14 @@ class FileShareClient:
         # ... (File decryption, integrity verification) ...
         try:
             self.client_socket.send('DOWNLOAD'.encode())
-            # self.client_socket.send(self.session_key.encode())
-            # isAuth = self.client_socket.recv(1024).decode()
-            # if isAuth == "INVALID_SESSION":
-            #     return False
+            if self.authenticate_session() == "INVALID_SESSION":
+                return False
 
             self.client_socket.send(filename.encode())
             file_size_data = self.client_socket.recv(1024).decode()
             if file_size_data == "FILE_NOT_FOUND":
                 print(f"[Client]  File '{filename}' not found on peer.")
-                return
+                return None
 
             file_size = int(file_size_data)
             file_data = b''
@@ -121,10 +121,8 @@ class FileShareClient:
         # Distributed Index? - Simplification required) ...
 
         self.client_socket.send("SEARCH".encode())
-        # self.client_socket.send(self.session_key.encode())
-        # isAuth = self.client_socket.recv(1024).decode()
-        # if isAuth == "INVALID_SESSION":
-        #     return False
+        if self.authenticate_session() == "INVALID_SESSION":
+            return False
 
         self.client_socket.send(file_name.encode())
         res = self.client_socket.recv(1024).decode()

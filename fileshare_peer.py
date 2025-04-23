@@ -23,7 +23,7 @@ def is_authenticated(session_id):
     date_obj = datetime.datetime
     for data in json_data.values():
         if data['session_id'] == session_id and date_obj.fromisoformat(
-                data['session_expiration_date']) <= date_obj.now():
+                data['session_expiration_date']) >= date_obj.now():
             return True
     return False
 
@@ -36,7 +36,7 @@ class FileSharePeer:
         self.host = '127.0.0.1'
         self.connected_users = []
         self.shared_files = {}  # {file_name: [filepath , fileSize]}
-        # {file_id: [filepath, owner_username, ...]} - Track files shared by this peer
+        # {file_id: [[file_names], filepath, owner_username, fileSize]} Needed
 
     def start_peer(self):
         self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -139,11 +139,12 @@ class FileSharePeer:
                 # ........Download........
                 elif command == "DOWNLOAD":
                     # ... (Receive file ID, retrieve encrypted file chunks, send chunks to requesting client) ...
-                    # sessionId = str(client_socket.recv(1024).decode())
-                    # if not is_authenticated(sessionId):
-                    #     client_socket.send("INVALID_SESSION".encode())
-                    #     break
-                    # client_socket.send("AUTHENTICATED".encode())
+
+                    sessionId = str(client_socket.recv(1024).decode())
+                    if not is_authenticated(sessionId):
+                        client_socket.send("INVALID_SESSION".encode())
+                        break
+                    client_socket.send("AUTHENTICATED".encode())
 
                     filename = client_socket.recv(1024).decode()
                     if filename not in self.shared_files.keys():
@@ -160,25 +161,22 @@ class FileSharePeer:
                             file_data = file.read()
                             client_socket.sendall(file_data)
                         print(f"[Peer] File '{filename}' sent to client.")
-
+                        file.close()
                     except Exception as e:
                         print(f"[Peer] Error sending file '{filename}': {e}")
                         client_socket.send("ERROR".encode())  # Indicate error
 
-                    finally:
-                        file.close()
-
                 # Searching Files
                 elif command == "SEARCH":
                     # ... (Receive search keyword, search local shared files, respond with file list - for simplified P2P search) ...
-                    # sessionId = str(client_socket.recv(1024).decode())
-                    # if not is_authenticated(sessionId):
-                    #     client_socket.send("INVALID_SESSION".encode())
-                    #     break
-                    # client_socket.send("AUTHENTICATED".encode())
+
+                    sessionId = str(client_socket.recv(1024).decode())
+                    if not is_authenticated(sessionId):
+                        client_socket.send("INVALID_SESSION".encode())
+                        break
+                    client_socket.send("AUTHENTICATED".encode())
 
                     filename = client_socket.recv(1024).decode()
-
                     if filename in self.shared_files.keys():
                         client_socket.send("FILE_FOUND".encode())
                     else:
