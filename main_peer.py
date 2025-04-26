@@ -87,28 +87,29 @@ if __name__ == "__main__":
                 # ...Authentication Section...
                 AuthenticationChoice = inquirer.select(
                     message="Choose an Authentication :",
-                    choices=["1. REGISTER", "2. LOGIN"]).execute()[0]
+                    choices=["1. LOGIN", "2. REGISTER"]).execute()[0]
 
-                if AuthenticationChoice == "1":
+                if AuthenticationChoice == "2":
                     username = input("Username :")
                     password = input("Password :")
                     result = peerMain.client.register_user(username, password)
                     if result:
-                        print("Registered Successfully Please login")
-                        AuthenticationChoice = "2"
-                if AuthenticationChoice == "2":
+                        print("Registered Please login")
+                        AuthenticationChoice = "1"
+
+                if AuthenticationChoice == "1":
                     username = input("Username :")
                     password = input("Password :")
                     result = peerMain.client.login_user(username, password)
                     if result:
-                        print("Logged In Successfully")
+                        print("Logged in")
                         isLoggedIn = True
 
             while isLoggedIn and connectedToPeer:
                 # ...File Handling Section...
                 userChoice = inquirer.select(
                     message="Application Menu",
-                    choices=["1. UPLOAD", "2. DOWNLOAD", "3. SEARCH", "4. Show All files", "5. Disconnect"]
+                    choices=["1. UPLOAD", "2. DOWNLOAD", "3. SEARCH", "4. List My Shared Files", "5. Disconnect"]
                 ).execute()[0]
 
                 # ...File Upload...
@@ -117,7 +118,7 @@ if __name__ == "__main__":
                     if os.path.exists(path):
                         try:
                             result = peerMain.client.upload_file(path)
-                            if result == False:
+                            if result is False:
                                 isLoggedIn = False
                                 connectedToPeer = False
                                 print("Session Invalid please login")
@@ -135,24 +136,12 @@ if __name__ == "__main__":
                     if result is False:
                         isLoggedIn = False
                         connectedToPeer = False
-                        print("Session Invalid please login")
                         break
-                    elif result is None:
-                        print("File not found")
 
                 # ...Search File...
                 elif userChoice == "3":
                     filename = input("Please enter file name\nFilename :")
-                    isFound = peerMain.client.search_files(filename)
-                    if isFound:
-                        downloadOption = inquirer.select(
-                            message="Want to download File",
-                            choices=['Yes', 'No']).execute()
-                        if downloadOption == 'Yes':
-                            destination_path = input("Where to download file\nDestination Path :")
-                            peerMain.client.download_file(filename, destination_path)
-                    else:
-                        print("File not found")
+                    peerMain.client.search_files(filename)
 
                 # ...List All Files...
                 elif userChoice == "4":

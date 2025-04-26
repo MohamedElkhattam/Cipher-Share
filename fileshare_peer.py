@@ -114,23 +114,32 @@ class FileSharePeer:
                         break
                     client_socket.send("AUTHENTICATED".encode())
 
+                    # Receive File Name and check for it's existence
                     file_name = client_socket.recv(1024).decode()
-
                     if file_name in self.shared_files.keys():
                         print(f"[Peer] file {file_name} already exists")
                         continue
 
+                    # # Key Exchange using Diffie-Hellman
+                    # peer2_private, peer2_public, P = crypto_utils.generate_key_pair()
+                    # client_socket.send(str(peer2_public).encode())
+                    # peer1_public = int(client_socket.recv(1024))
+                    # shared_key = pow(peer2_private, peer1_public, P)
+
+                    # Receiving Encrypted File size and data
                     file_size = int(client_socket.recv(1024).decode())
-                    file_data = b''
-
-                    while len(file_data) < file_size:
-                        packet = client_socket.recv(file_size - len(file_data))
-                        if not packet:
+                    received_data = b''
+                    while len(received_data) < file_size:
+                        chunk = client_socket.recv(4096)
+                        if not chunk:
                             break
-                        file_data += packet
+                        received_data += chunk
 
+                    # Decrypting File Data
+                    # file_data = crypto_utils.decrypt_data(received_data, shared_key)
                     with open(f"{file_name}", 'wb') as file:
-                        file.write(file_data)
+                        # file.write(file_data)
+                        file.write(received_data)
 
                     cwd = os.getcwd()
                     self.shared_files[file_name] = [cwd, file_size]
@@ -152,19 +161,22 @@ class FileSharePeer:
                         print("[Peer] File not found.")
                         continue
 
-                    filepath = os.path.join(self.shared_files[filename][0], filename)
+                    # # Key Exchange using Diffie-Hellman
+                    # peer1_private, peer1_public, P = crypto_utils.generate_key_pair()
+                    # client_socket.send(str(peer1_public).encode())
+                    # peer2_public = int(client_socket.recv(1024))
+                    # shared_key = pow(peer1_private, peer2_public, P)
+
+                    file_path = os.path.join(self.shared_files[filename][0], filename)
                     file_size = self.shared_files[filename][1]
                     client_socket.send(str(file_size).encode())
 
-                    try:
-                        with open(filepath, 'rb') as file:
-                            file_data = file.read()
-                            client_socket.sendall(file_data)
-                        print(f"[Peer] File '{filename}' sent to client.")
-                        file.close()
-                    except Exception as e:
-                        print(f"[Peer] Error sending file '{filename}': {e}")
-                        client_socket.send("ERROR".encode())  # Indicate error
+                    with open(file_path, 'rb') as file:
+                        file_data = file.read()
+                    # encrypt_file_data = crypto_utils.encrypt_data(file_data, shared_key)
+                    # client_socket.sendall(encrypt_file_data)
+                    client_socket.sendall(file_data)
+                    print(f"[Peer] File '{filename}' sent to client.")
 
                 # Searching Files
                 elif command == "SEARCH":

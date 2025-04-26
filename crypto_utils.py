@@ -1,12 +1,14 @@
-import secrets
+import hashlib
+import os
 # for encryption
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # for encrypting passwords
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 # for hashing password
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+import secrets
 
 # Password Hasher instance (Argon2)
 ph = PasswordHasher()
@@ -37,18 +39,30 @@ def derive_key_from_password(password, salt):
 
 
 # === ENCRYPTION / DECRYPTION ===
-def encrypt_data(data, key):
-    iv = secrets.token_bytes(16)
-    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+def encrypt_files(data, key):
+    iv = os.urandom(16)
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+
     encryptor = cipher.encryptor()
-    return iv + encryptor.update(data) + encryptor.finalize()
+    padder = padding.PKCS7(128).padder()  # 16-Bytes
+    padded_data = padder.update(data) + padder.finalize()
+
+    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
+    return iv + encrypted_data
+    # CBC mode is the most efficient one with the file encryption
 
 
-def decrypt_data(ciphertext, key):
+def decrypt_files(ciphertext, key):
     iv = ciphertext[:16]
-    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     decryptor = cipher.decryptor()
-    return decryptor.update(ciphertext[16:]) + decryptor.finalize()
+
+    padded_plaintext = decryptor.update(ciphertext[16:]) + decryptor.finalize()
+
+    unpadder = padding.PKCS7(128).unpadder()
+    plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+
+    return plaintext
 
 
 def hash_sha256(data):
@@ -57,20 +71,28 @@ def hash_sha256(data):
     hashed = digest.finalize()
     return hashed.hex()
 
-# === USAGE EXAMPLE ===
-# if __name__ == "__main__":
-#     print(hash_sha256("fileName".encode()))
-#     user_password = "MySecurePassword123"
-#
-#     salt = os.urandom(16)
-#     print("\n--- Key Derivation ---")
-#     key = derive_key_from_password("MyPass", salt)
-#     print("Key (hex):", key.hex())
-#
-#     print("\n--- Encrypt/Decrypt ---")
-#     secret = b"This is a secret message."
-#     encrypted = encrypt_data(secret, key)
-#     print("Encrypted:", encrypted.hex())
-#
-#     decrypted = decrypt_data(encrypted, key)
-#     print("Decrypted:", decrypted.decode())
+
+def generate_key_pair():
+    P = int("""
+       FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1
+       29024E08 8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD
+       EF9519B3 CD3A431B 302B0A6D F25F1437 4FE1356D 6D51C245
+       E485B576 625E7EC6 F44C42E9 A637ED6B 0BFF5CB6 F406B7ED
+       EE386BFB 5A899FA5 AE9F2411 7C4B1FE6 49286651 ECE65381
+       FFFFFFFF FFFFFFFF
+       """.replace(" ", "").replace("\n", ""), 16)
+    G = 5
+    private_key = secrets.randbelow(P - 2) + 1
+    public_key = pow(G, private_key, P)
+    return private_key, public_key, P
+
+
+if __name__ == "__main__":
+    private, public, p = generate_key_pair()
+    encryption_key = pow(private, public, p)
+
+    key_material = hashlib.sha256(str(encryption_key).encode()).digest()
+    hashlib.sha256()
+    with open('../shared_files/Project_Description.pdf', 'rb') as file:
+        file_bytes = file.read()
+    encrypt_files(file_bytes, key_material)

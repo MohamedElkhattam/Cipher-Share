@@ -21,7 +21,6 @@ class FileShareClient:
     def authenticate_session(self):
         self.client_socket.send(self.session_key.encode())
         isAuth = self.client_socket.recv(1024).decode()
-        print(isAuth)
         return isAuth
 
     def register_user(self, username, password):
@@ -60,26 +59,29 @@ class FileShareClient:
             self.client_socket.send('UPLOAD'.encode())
             if self.authenticate_session() == "INVALID_SESSION":
                 return False
-            print("print here")
-            file_name = os.path.basename(filepath)
+
+            file_name = os.path.basename(filepath)  # File name
             self.client_socket.send(file_name.encode())
-            file_size = os.path.getsize(filepath)
 
             with open(filepath, 'rb') as file:
                 file_data = file.read()
 
+            # # Key Exchange using Diffie-Hellman
+            # peer1_private, peer1_public, P = crypto_utils.generate_key_pair()
+            # self.client_socket.send(str(peer1_public).encode())
+            # peer2_public = int(self.client_socket.recv(1024))
+            # shared_key = pow(peer1_private, peer2_public, P)
+
+            file_size = os.path.getsize(filepath)  # File size
             self.client_socket.send(str(file_size).encode())
+
+            # encryptedFileBytes = crypto_utils.encrypt_data(file_data, str(shared_key).encode())
+            # self.client_socket.sendall(encryptedFileBytes)  # Sending File data
             self.client_socket.sendall(file_data)
-
+            # Saving File_id as key and file name/s as value
             file_id = crypto_utils.hash_sha256(file_data)
-            if file_id not in self.shared_files:
-                self.shared_files[file_id] = [file_name]
-            else:
-                self.shared_files[file_id].append(file_name)
-            print(self.shared_files)
-
+            self.shared_files.setdefault(file_id, []).append(file_name)
             print(f"[Client] File Uploaded Successfully")
-            file.close()
         except Exception as e:
             print(f"[Client] Client upload failed: {e}")
 
@@ -90,29 +92,37 @@ class FileShareClient:
         try:
             self.client_socket.send('DOWNLOAD'.encode())
             if self.authenticate_session() == "INVALID_SESSION":
+                print("Invalid session please login")
                 return False
-
             self.client_socket.send(filename.encode())
+
+            # # Key Exchange using Diffie-Hellman
+            # peer2_private, peer2_public, P = crypto_utils.generate_key_pair()
+            # self.client_socket.send(str(peer2_public).encode())
+            # peer1_public = int(self.client_socket.recv(1024))
+            # shared_key = pow(peer2_private, peer1_public, P)
+
+            # File Size or Error
             file_size_data = self.client_socket.recv(1024).decode()
             if file_size_data == "FILE_NOT_FOUND":
                 print(f"[Client]  File '{filename}' not found on peer.")
-                return None
-
+                return
             file_size = int(file_size_data)
-            file_data = b''
-            while len(file_data) < file_size:
-                packet = self.client_socket.recv(file_size - len(file_data))
-                if not packet:
-                    break
-                file_data += packet
 
+            # Receiving Encrypted File Data
+            received_data = b''
+            while len(received_data) < file_size:
+                chunk = self.client_socket.recv(4096)
+                if not chunk:
+                    break
+                received_data += chunk
+            # Decrypting File Data
+            # file_data = crypto_utils.decrypt_data(received_data, shared_key)
             full_path = os.path.join(destination_path, filename)
             with open(full_path, 'wb') as file:
-                file.write(file_data)
-
+                # file.write(file_data)
+                file.write(received_data)
             print(f"[Client] File '{filename}' saved to {destination_path}")
-            file.close()
-
         except Exception as e:
             print(f"[Client] Download failed: {e}")
 
@@ -127,8 +137,10 @@ class FileShareClient:
         self.client_socket.send(file_name.encode())
         res = self.client_socket.recv(1024).decode()
         if res == "FILE_FOUND":
-            return True
-        return False
+            print("File Found")
+            return
+        print("File Not Found")
+        return
 
     def list_shared_files(self):
         if not self.shared_files:
