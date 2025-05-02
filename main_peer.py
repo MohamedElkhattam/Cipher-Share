@@ -20,7 +20,8 @@ class PeerMain:
 
     def run_client(self, peer_address):
         self.client = Client()
-        threading.Thread(target=self.client.connect_to_peer, args=(peer_address,)).start()
+        threading.Thread(target=self.client.connect_to_peer,
+                         args=(peer_address,)).start()
         # Runs Client concurrently with main Thread
 
 
@@ -35,9 +36,11 @@ if __name__ == "__main__":
         peerMain.run_server()
 
         # Connecting to Centralized Server
-        centralizedServer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        centralizedServer_socket = socket.socket(
+            socket.AF_INET, socket.SOCK_STREAM)
         centralizedServer_socket.connect(('localhost', 8080))
-        centralizedServer_socket.sendall(f"{peerMain.peer.host},{peerMain.peer.port}".encode())
+        centralizedServer_socket.sendall(
+            f"{peerMain.peer.host},{peerMain.peer.port}".encode())
         print("[Peer] Connected to Centralized server")
 
         while True:
@@ -88,7 +91,7 @@ if __name__ == "__main__":
                 AuthenticationChoice = inquirer.select(
                     message="Choose an Authentication :",
                     choices=["1. LOGIN", "2. REGISTER"]).execute()[0]
-
+                # Register
                 if AuthenticationChoice == "2":
                     username = input("Username :")
                     password = input("Password :")
@@ -96,7 +99,7 @@ if __name__ == "__main__":
                     if result:
                         print("Registered Please login")
                         AuthenticationChoice = "1"
-
+                # Login
                 if AuthenticationChoice == "1":
                     username = input("Username :")
                     password = input("Password :")
@@ -109,12 +112,14 @@ if __name__ == "__main__":
                 # ...File Handling Section...
                 userChoice = inquirer.select(
                     message="Application Menu",
-                    choices=["1. UPLOAD", "2. DOWNLOAD", "3. SEARCH", "4. List My Shared Files", "5. Disconnect"]
+                    choices=["1. UPLOAD", "2. DOWNLOAD", "3. SEARCH",
+                             "4. List My Shared Files", "5. Disconnect"]
                 ).execute()[0]
 
                 # ...File Upload...
                 if userChoice == "1":
-                    path = input("Please enter path of the file to be uploaded\nPath :")
+                    path = input(
+                        "Please enter path of the file to be uploaded\nPath :")
                     if os.path.exists(path):
                         try:
                             result = peerMain.client.upload_file(path)
@@ -131,8 +136,10 @@ if __name__ == "__main__":
                 # ...File Download...
                 elif userChoice == "2":
                     filename = input("Please enter file name\nFilename :")
-                    destination_path = input("Where to download the file\nDestination Path :")
-                    result = peerMain.client.download_file(filename, destination_path)
+                    destination_path = input(
+                        "Where to download the file\nDestination Path :")
+                    result = peerMain.client.download_file(
+                        filename, destination_path)
                     if result is False:
                         isLoggedIn = False
                         connectedToPeer = False
@@ -141,7 +148,11 @@ if __name__ == "__main__":
                 # ...Search File...
                 elif userChoice == "3":
                     filename = input("Please enter file name\nFilename :")
-                    peerMain.client.search_files(filename)
+                    result = peerMain.client.search_files(filename)
+                    if result is False:
+                        isLoggedIn = False
+                        connectedToPeer = False
+                        break
 
                 # ...List All Files...
                 elif userChoice == "4":
@@ -156,6 +167,7 @@ if __name__ == "__main__":
                 elif userChoice == "5":
                     peerMain.client.disconnect_peer()
                     connectedToPeer = False
+                    isLoggedIn = False
                     print("Disconnected")
                     break
 
@@ -167,7 +179,9 @@ if __name__ == "__main__":
 
     finally:
         print("Closing connection")
-        if peerMain:
+        # TODO : Notify client when peer server in no longer available
+        if peerMain.peer:
             centralizedServer_socket.send("DISCONNECT".encode())
             centralizedServer_socket.close()
+        if peerMain.client:
             peerMain.client.disconnect_peer()

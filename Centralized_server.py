@@ -15,7 +15,8 @@ class CentralizedServer:
         print("Server Listening On Port 8080")
         while True:
             peer_connection, _ = self.server_socket.accept()
-            server_thread = threading.Thread(target=self.handle_incoming_peers, args=(peer_connection,))
+            server_thread = threading.Thread(
+                target=self.handle_incoming_peers, args=(peer_connection,))
             server_thread.start()
 
     def handle_incoming_peers(self, peer_connection):
@@ -30,7 +31,8 @@ class CentralizedServer:
                     for i in range(len(self.online_peers)):
                         if self.online_peers[i] != peer_address:
                             online_peers_dict[i + 1] = self.online_peers[i]
-                    peer_connection.send(json.dumps(online_peers_dict).encode())
+                    peer_connection.send(json.dumps(
+                        online_peers_dict).encode())
 
                 elif command == "DISCONNECT":
                     self.online_peers.remove(peer_address)

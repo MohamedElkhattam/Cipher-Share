@@ -1,9 +1,9 @@
-import hashlib
 import os
 # for encryption
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # for encrypting passwords
+# for encrypting passwords
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 # for hashing password
 from argon2 import PasswordHasher
@@ -41,7 +41,8 @@ def derive_key_from_password(password, salt):
 # === ENCRYPTION / DECRYPTION ===
 def encrypt_files(data, key):
     iv = os.urandom(16)
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv),
+                    backend=default_backend())
 
     encryptor = cipher.encryptor()
     padder = padding.PKCS7(128).padder()  # 16-Bytes
@@ -54,7 +55,8 @@ def encrypt_files(data, key):
 
 def decrypt_files(ciphertext, key):
     iv = ciphertext[:16]
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv),
+                    backend=default_backend())
     decryptor = cipher.decryptor()
 
     padded_plaintext = decryptor.update(ciphertext[16:]) + decryptor.finalize()
@@ -85,14 +87,3 @@ def generate_key_pair():
     private_key = secrets.randbelow(P - 2) + 1
     public_key = pow(G, private_key, P)
     return private_key, public_key, P
-
-
-if __name__ == "__main__":
-    private, public, p = generate_key_pair()
-    encryption_key = pow(private, public, p)
-
-    key_material = hashlib.sha256(str(encryption_key).encode()).digest()
-    hashlib.sha256()
-    with open('../shared_files/Project_Description.pdf', 'rb') as file:
-        file_bytes = file.read()
-    encrypt_files(file_bytes, key_material)
