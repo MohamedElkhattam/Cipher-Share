@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 import secrets
-
+import hashlib
 # Password Hasher instance (Argon2)
 ph = PasswordHasher()
 
@@ -72,6 +72,9 @@ def hash_sha256(data):
     digest.update(data)
     hashed = digest.finalize()
     return hashed.hex()
+
+def hash_sha1(data):
+    return hashlib.sha1(data.encode())
 
 
 def generate_key_pair():
