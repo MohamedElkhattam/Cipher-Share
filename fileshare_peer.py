@@ -6,10 +6,12 @@ import socket
 import datetime
 import threading
 import crypto_utils
-
+import re
 
 # ... (Data structures for user info, shared files, peer lists etc.)...
 # noinspection DuplicatedCode
+
+
 class FileSharePeer:
     def __init__(self, port):
         self.port = int(port)
@@ -18,8 +20,8 @@ class FileSharePeer:
         self.connected_users = []
         self.client_socket = None
         self.authenticated_username = None
-        self.shared_files = {}  # {file_name: [filepath , fileSize]}
-        # {file_id: [[file_names], filepath, owner_username, fileSize]} Needed
+        self.shared_files = {}
+        # TODO : Add new node
 
     def start_peer(self):
         self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -66,7 +68,7 @@ class FileSharePeer:
 
                 # .......Login.........
                 elif command == "LOGIN":
-                    # No 2 users logged in with same credentials
+
                     username, password = str(
                         self.client_socket.recv(1024).decode()).split("||")
                     jsonFile_data = json_file_read()
@@ -77,12 +79,14 @@ class FileSharePeer:
 
                         if res:
                             if jsonFile_data[username]["isOnline"] is True:
-                                self.client_socket.send("USER_LOGGED_IN".encode())
+                                self.client_socket.send(
+                                    "USER_LOGGED_IN".encode())
                             else:
                                 session_id = str(uuid.uuid4())
                                 jsonFile_data[username]["session_id"] = session_id
                                 session_expiration_date = datetime.datetime.now() + datetime.timedelta(minutes=5)
-                                jsonFile_data[username]["session_expiration_date"] = session_expiration_date.isoformat()
+                                jsonFile_data[username]["session_expiration_date"] = session_expiration_date.isoformat(
+                                )
                                 jsonFile_data[username]["isOnline"] = True
                                 self.authenticated_username = username
                                 with open('credentials.json', 'w') as json_file:
@@ -92,13 +96,13 @@ class FileSharePeer:
                                 self.client_socket.send(session_id.encode())
                                 print("[Peer] User logged in  successfully")
                         else:
-                            self.client_socket.send("WRONG_CREDENTIALS".encode())
+                            self.client_socket.send(
+                                "WRONG_CREDENTIALS".encode())
                     else:
                         self.client_socket.send("WRONG_CREDENTIALS".encode())
 
                 # ......Upload........
                 elif command == "UPLOAD":
-                    # ... (Receive file metadata, then encrypted file chunks, store chunks, update shared_files list) ...
 
                     sessionId = str(self.client_socket.recv(1024).decode())
                     result = is_authenticated(sessionId)
@@ -147,10 +151,8 @@ class FileSharePeer:
                     print(self.shared_files)
                     print(f"[Peer] Received file '{file_name}' successfully.")
 
-
                 # ........Download........
                 elif command == "DOWNLOAD":
-                    # ... (Receive file ID, retrieve encrypted file chunks, send chunks to requesting client) ...
 
                     sessionId = str(self.client_socket.recv(1024).decode())
                     if not is_authenticated(sessionId):
@@ -189,19 +191,26 @@ class FileSharePeer:
                     print(f"[Peer] File '{filename}' sent to client.")
 
                 # Searching Files
-                elif command == "SEARCH":
-                    # ... (Receive search keyword, search local shared files, respond with file list - for simplified P2P search) ...
-                    sessionId = str(self.client_socket.recv(1024).decode())
-                    if not is_authenticated(sessionId):
-                        self.client_socket.send("INVALID_SESSION".encode())
-                        break
-                    self.client_socket.send("AUTHENTICATED".encode())
+                elif command == r"SEARCH*":
+                    # Client
+                    if command == "SEARCH":
+                        sessionId = str(self.client_socket.recv(1024).decode())
+                        if not is_authenticated(sessionId):
+                            self.client_socket.send("INVALID_SESSION".encode())
+                            break
+                        self.client_socket.send("AUTHENTICATED".encode())
 
-                    file_name = self.client_socket.recv(1024).decode()
-                    if file_name in self.shared_files.keys():
-                        self.client_socket.send("FILE_FOUND".encode())
+                        file_name = self.client_socket.recv(1024).decode()
+                        # if file_name in self.shared_files.keys():
+                        #     self.client_socket.send("FILE_FOUND".encode())
+                        # else:
+                        #     self.client_socket.send("FILE_NOT_FOUND".encode())
+
+                        # ? Replaced with Node Searching
+
+                    # Node
                     else:
-                        self.client_socket.send("FILE_NOT_FOUND".encode())
+                        pass
 
                 # Client Disconnected
                 elif command == "DISCONNECT":
