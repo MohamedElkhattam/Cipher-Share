@@ -2,6 +2,7 @@ import json
 import os
 import socket
 import threading
+import time
 from InquirerPy import inquirer
 from fileshare_client import FileShareClient as Client
 from fileshare_peer import FileSharePeer as Peer
@@ -39,7 +40,9 @@ if __name__ == "__main__":
         centralizedServer_socket = socket.socket(
             socket.AF_INET, socket.SOCK_STREAM)
         centralizedServer_socket.connect(('localhost', 8080))
-        centralizedServer_socket.sendall(
+        centralizedServer_socket.send("REGISTER_PEER".encode())
+        time.sleep(0.01)
+        centralizedServer_socket.send(
             f"{peerMain.peer.host},{peerMain.peer.port}".encode())
         print("[Peer] Connected to Centralized server")
 
@@ -87,7 +90,25 @@ if __name__ == "__main__":
                         break
 
             while connectedToPeer and not isLoggedIn:
-                # ...Authentication Section...
+                saved_username, saved_password = peerMain.client.load_credentials()
+
+                if saved_username and saved_password:
+                    use_saved = inquirer.select(
+                        message="Found saved credentials. Use them?",
+                        choices=['Yes', 'No']).execute()
+
+                    if use_saved == 'Yes':
+                        result = peerMain.client.login_user(
+                            saved_username, saved_password)
+                        if result:
+                            print("Logged in with saved credentials")
+                            isLoggedIn = True
+                            continue
+                        else:
+                            print("Saved credentials failed, please login manually")
+                            peerMain.client.clear_credentials()
+
+                # Manual authentication
                 AuthenticationChoice = inquirer.select(
                     message="Choose an Authentication :",
                     choices=["1. LOGIN", "2. REGISTER"]).execute()[0]
@@ -103,7 +124,11 @@ if __name__ == "__main__":
                 if AuthenticationChoice == "1":
                     username = input("Username :")
                     password = input("Password :")
-                    result = peerMain.client.login_user(username, password)
+                    remember_me = inquirer.select(
+                        message="Remember me?",
+                        choices=['Yes', 'No']).execute() == 'Yes'
+                    result = peerMain.client.login_user(
+                        username, password, remember_me)
                     if result:
                         print("Logged in")
                         isLoggedIn = True
@@ -179,9 +204,13 @@ if __name__ == "__main__":
 
     finally:
         print("Closing connection")
-        # TODO : Notify client when peer server in no longer available
-        if peerMain.peer:
-            centralizedServer_socket.send("DISCONNECT".encode())
-            centralizedServer_socket.close()
-        if peerMain.client:
-            peerMain.client.disconnect_peer()
+        try:
+            if peerMain and peerMain.client:
+                peerMain.client.disconnect_peer()
+
+            # Then disconnect from centralized server
+            if peerMain and peerMain.peer:
+                centralizedServer_socket.send("DISCONNECT".encode())
+                centralizedServer_socket.close()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")

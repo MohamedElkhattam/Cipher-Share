@@ -1,6 +1,7 @@
 import hashlib
 import os
 import socket
+import json
 import crypto_utils
 
 
@@ -10,6 +11,67 @@ class FileShareClient:
         self.username = None
         self.session_key = None
         self.shared_files = {}
+        self.credentials_file = 'client_credentials.enc'
+        self.client_side_HashedPassword = 'hashed_password.enc'
+        # saved only client side
+
+    def save_credentials(self, username, password, remember_me=False):
+        if not remember_me:
+            return
+
+        hashed_password = crypto_utils.hash_password(password)
+        salt = os.urandom(16)
+        key = crypto_utils.derive_key_from_password(hashed_password, salt)
+
+        credentials = {
+            'username': username,
+            'password': password
+        }
+
+        encrypted_data = crypto_utils.encrypt_files(
+            json.dumps(credentials).encode(),
+            key
+        )
+
+        with open(self.credentials_file, 'wb') as f:
+            f.write(salt + encrypted_data)
+
+        with open(self.client_side_HashedPassword, 'wb') as f:
+            f.write(hashed_password.encode())
+
+    def load_credentials(self):
+        if not os.path.exists(self.credentials_file) and not os.path.exists(self.client_side_HashedPassword):
+            return None, None
+
+        try:
+            with open(self.client_side_HashedPassword, 'rb') as f:
+                hashed_password = f.read().decode()
+            with open(self.credentials_file, 'rb') as f:
+                data = f.read()
+
+            # Extract salt and encrypted data
+            salt = data[:16]
+            encrypted_data = data[16:]
+
+            try:
+                key = crypto_utils.derive_key_from_password(
+                    hashed_password, salt)
+                decrypted_data = crypto_utils.decrypt_files(
+                    encrypted_data, key)
+                credentials = json.loads(decrypted_data)
+                return credentials['username'], credentials['password']
+            except Exception as e:
+                print(f"[Client] Decryption failed: {e}")
+                return None, None
+
+        except Exception as e:
+            print(f"[Client] Error loading credentials: {e}")
+            return None, None
+
+    def clear_credentials(self):
+        if os.path.exists(self.credentials_file) and os.path.exists(self.client_side_HashedPassword):
+            os.remove(self.credentials_file)
+            os.remove(self.client_side_HashedPassword)
 
     def connect_to_peer(self, peer_address):
         try:
@@ -17,8 +79,9 @@ class FileShareClient:
                 socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect(peer_address)
             print(f"[Client] Connected to peer at {peer_address}")
-        except Exception as e: #TODO : Needs exception to remove offline peers
-            print(f"Exception connection to Peer Server with address{peer_address}:{e}")
+        except Exception as e:
+            print(
+                f"Exception connection to Peer Server with address{peer_address}:{e}")
 
     def authenticate_session(self):
         self.client_socket.send(self.session_key.encode())
@@ -26,9 +89,6 @@ class FileShareClient:
         return isAuth
 
     def register_user(self, username, password):
-        #  how to distribute user info in P2P? - Simplification needed, perhaps a dedicate
-        #  'user registry' peer initially or file-based for simplicity) ...
-        # ... (Client-side password hashing and salt generation) ...
         if len(username) < 4 or len(password) < 4:
             print("[Client] Username or password is too short")
             return False
@@ -41,10 +101,7 @@ class FileShareClient:
         print("[Client] " + res)
         return False
 
-    def login_user(self, username, password):
-        # authenticates against stored hashed password - handle session -
-        # simplified session management for P2P could be token-based or direct connection based).
-        # ... (Client-side password hashing to compare against stored hash) ...
+    def login_user(self, username, password, remember_me=False):
         if len(username) == 0 or len(password) == 0:
             print("[Client] Please enter username and password")
             return False
@@ -61,19 +118,18 @@ class FileShareClient:
         else:
             self.session_key = res
             self.username = username
+            if remember_me:
+                self.save_credentials(username, password, True)
             return True
 
     def upload_file(self, filepath):
-        # ... (Read file in chunks, encrypt chunks, send chunks to peer -
-        # need to implement P2P file transfer protocol - simplified) ...
-        # ... (File encryption using crypto_utils, integrity hash generation) ...
         try:
             self.client_socket.send('UPLOAD'.encode())
             if self.authenticate_session() == "INVALID_SESSION":
                 print("[Client] Session Expired!")
                 return False
 
-            file_name = os.path.basename(filepath)  # File name
+            file_name = os.path.basename(filepath)
             self.client_socket.send(file_name.encode())
 
             with open(filepath, 'rb') as file:
@@ -96,22 +152,19 @@ class FileShareClient:
                 file_data, AES_precise_encryption_key)
             self.client_socket.sendall(encryptedFileBytes)
 
-            # Saving File_id as key and file name/s as value
             file_id = crypto_utils.hash_sha256(file_data)
-            self.shared_files.setdefault(file_id, []).append(file_name)
-            print(f"[Client] File Uploaded Successfully")
-        except Exception as e:
-            print(f"[Client] Client upload failed: {e}")
+            self.shared_files[file_id] = file_name
 
-    # noinspection DuplicatedCode
-    def download_file(self, filename, destination_path):  # there should be fileId
-        # ... (Request file from peer, receive encrypted chunks, decrypt chunks, verify integrity,
-        # save file) ...
-        # ... (File decryption, integrity verification) ...
+            print(f"[Client] File Uploaded Successfully")
+            return True
+        except Exception as e:
+            print(f"[Client] Upload failed: {e}")
+            return False
+
+    def download_file(self, filename, destination_path):
         try:
             self.client_socket.send('DOWNLOAD'.encode())
             if self.authenticate_session() == "INVALID_SESSION":
-                print("[Client] Session Expired!")
                 print("[Client] Session Expired!")
                 return False
             self.client_socket.send(filename.encode())
@@ -123,48 +176,65 @@ class FileShareClient:
             shared_key = pow(peer1_public, peer2_private, P)
             AES_precise_encryption_key = hashlib.sha256(
                 str(shared_key).encode()).digest()
-            print(AES_precise_encryption_key)
-            # File Size or Error
-            file_size_data = self.client_socket.recv(1024).decode()
-            if file_size_data == "FILE_NOT_FOUND":
-                print(f"[Client]  File '{filename}' not found on peer.")
-                return
-            file_size = int(file_size_data)
 
-            # Receiving Encrypted File Data
+            file_size = int(self.client_socket.recv(1024).decode().strip())
             received_data = b''
             while len(received_data) < file_size:
                 chunk = self.client_socket.recv(4096)
                 if not chunk:
                     break
                 received_data += chunk
+
             # Decrypting File Data
-            file_data = crypto_utils.decrypt_files(
-                received_data, AES_precise_encryption_key)
-            full_path = os.path.join(destination_path, filename)
-            with open(full_path, 'wb') as file:
-                file.write(file_data)
-            print(f"[Client] File '{filename}' saved to {destination_path}")
+            try:
+                file_data = crypto_utils.decrypt_files(
+                    received_data, AES_precise_encryption_key)
+            except Exception as e:
+                print(f"[Client] Decryption failed: {e}")
+                return False
+
+            # Save decrypted file
+            try:
+                full_path = os.path.join(destination_path, filename)
+                with open(full_path, 'wb') as file:
+                    file.write(file_data)
+
+                print(
+                    f"[Client] File '{filename}' saved to {destination_path}")
+
+                return True
+            except Exception as e:
+                print(f"[Client] Failed to save file: {e}")
+                return False
+
         except Exception as e:
             print(f"[Client] Download failed: {e}")
-
-    def search_files(self, file_name):  # Keyword
-        # ... (Implement file search in the P2P network - broadcasting?
-        # Distributed Index? - Simplification required) ...
-
-        self.client_socket.send("SEARCH".encode())
-        print("Send function command")
-        if self.authenticate_session() == "INVALID_SESSION":
-            print("[Client] Session Expired!")
             return False
 
-        self.client_socket.send(file_name.encode())
-        res = self.client_socket.recv(1024).decode()
-        if res == "FILE_FOUND":
-            print("File Found")
-            return
-        print("File Not Found")
-        return
+    def search_files(self, file_name):
+        # ...Search for files in the P2P network using DHT...
+        try:
+            self.client_socket.send("SEARCH".encode())
+            if self.authenticate_session() == "INVALID_SESSION":
+                print("[Client] Session Expired!")
+                return False
+
+            self.client_socket.send(file_name.encode())
+            response = json.loads(self.client_socket.recv(1024).decode())
+
+            if response["status"] == "FILE_FOUND":
+                file_info = response["file_info"]
+                print("\n[Client] File Found!")
+                print(f"File Name: {file_info['file_name']}")
+                print(f"Owner: {file_info['owner']}")
+                print(f"Size: {file_info['size']} bytes")
+                return True
+            else:
+                print("\n[Client] File Not Found")
+                return False
+        except Exception as e:
+            print(f"[Client] Search failed: {e}")
+            return False
 
     def list_shared_files(self):
         if not self.shared_files:

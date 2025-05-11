@@ -10,6 +10,10 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 import secrets
 import hashlib
+import hmac
+
+from Distributed_hash_table import KEY_SPACE
+
 # Password Hasher instance (Argon2)
 ph = PasswordHasher()
 
@@ -67,11 +71,17 @@ def decrypt_files(ciphertext, key):
     return plaintext
 
 
+def getFileId(key):
+    hash_bytes = hashlib.sha1(key).digest()
+    return int.from_bytes(hash_bytes, 'big') % KEY_SPACE
+
+
 def hash_sha256(data):
     digest = hashes.Hash(hashes.SHA256())
     digest.update(data)
     hashed = digest.finalize()
     return hashed.hex()
+
 
 def hash_sha1(data):
     return hashlib.sha1(data.encode())
@@ -90,3 +100,22 @@ def generate_key_pair():
     private_key = secrets.randbelow(P - 2) + 1
     public_key = pow(G, private_key, P)
     return private_key, public_key, P
+
+
+def create_hmac(message, key):
+    # Create HMAC using SHA-256
+    try:
+        h = hmac.new(key, message, hashlib.sha256)
+        return h.hexdigest().encode()
+    except Exception as e:
+        print(f"[Crypto] HMAC creation failed: {e}")
+        return None
+
+
+def verify_hmac(message, key, received_hmac):
+    try:
+        h = hmac.new(key, message, hashlib.sha256)
+        return h.hexdigest().encode() == received_hmac
+    except Exception as e:
+        print(f"[Crypto] HMAC verification failed: {e}")
+        return False

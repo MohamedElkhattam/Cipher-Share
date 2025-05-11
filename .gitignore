@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Local credentials and keys (these will be ignored locally)
+# But we'll force add them to git
+credentials.json
+hashed_password.enc
+client_credentials.enc
+
+# Other
+.DS_Store
+*.log 
